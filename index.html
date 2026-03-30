@@ -1,0 +1,1696 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Відновлювана Енергія України</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+  
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg-primary: #0a0e1a;
+      --bg-secondary: #111827;
+      --bg-panel: rgba(17, 24, 39, 0.95);
+      --text-primary: #ffffff;
+      --text-secondary: #9ca3af;
+      --accent-hydro: #00d4ff;
+      --accent-wind: #00ff88;
+      --accent-solar: #ffd700;
+      --accent-empty: #ff4444;
+      --border-glow: rgba(255, 255, 255, 0.1);
+    }
+
+    body {
+      font-family: 'Source Code Pro', monospace;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Grid Background Pattern */
+    body::before {
+      content: '';
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-image: 
+        linear-gradient(rgba(0, 212, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 212, 255, 0.03) 1px, transparent 1px);
+      background-size: 50px 50px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Main Layout */
+    .game-container {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Header */
+    .header {
+      grid-column: 1 / -1;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border-glow);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      backdrop-filter: blur(10px);
+    }
+
+    .header h1 {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      background: linear-gradient(135deg, var(--accent-hydro), var(--accent-wind));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .progress-bar {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .progress-text {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+    }
+
+    .progress-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .progress-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--bg-secondary);
+      border: 2px solid var(--border-glow);
+      transition: all 0.3s ease;
+    }
+
+    .progress-dot.completed {
+      background: var(--accent-wind);
+      border-color: var(--accent-wind);
+      box-shadow: 0 0 10px var(--accent-wind);
+    }
+
+    /* Sidebar */
+    .sidebar {
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border-glow);
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      backdrop-filter: blur(10px);
+    }
+
+    .current-station {
+      flex: 1;
+    }
+
+    .section-label {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.7rem;
+      letter-spacing: 3px;
+      color: var(--text-secondary);
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+    }
+
+    .station-card {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 1.5rem;
+      border: 1px solid var(--border-glow);
+      transition: all 0.3s ease;
+    }
+
+    .station-card.hydro { border-color: var(--accent-hydro); }
+    .station-card.wind { border-color: var(--accent-wind); }
+    .station-card.solar { border-color: var(--accent-solar); }
+
+    .station-image {
+      width: 100%;
+      aspect-ratio: 4/3;
+      background: var(--bg-primary);
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .station-image img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .station-name {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+    }
+
+    .station-type {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0.4rem 0.8rem;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .station-type.hydro {
+      background: rgba(0, 212, 255, 0.15);
+      color: var(--accent-hydro);
+    }
+
+    .station-type.wind {
+      background: rgba(0, 255, 136, 0.15);
+      color: var(--accent-wind);
+    }
+
+    .station-type.solar {
+      background: rgba(255, 215, 0, 0.15);
+      color: var(--accent-solar);
+    }
+
+    .type-icon {
+      font-size: 1rem;
+    }
+
+    .instructions {
+      margin-top: 2rem;
+      padding: 1rem;
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 8px;
+      border-left: 3px solid var(--accent-hydro);
+    }
+
+    .instructions p {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* Legend */
+    .legend {
+      margin-top: auto;
+      padding-top: 2rem;
+      border-top: 1px solid var(--border-glow);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 0.75rem;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    .legend-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+    }
+
+    .legend-dot.hydro { background: var(--accent-hydro); }
+    .legend-dot.wind { background: var(--accent-wind); }
+    .legend-dot.solar { background: var(--accent-solar); }
+    .legend-dot.empty { 
+      background: var(--accent-empty);
+      animation: pulse 1.5s infinite;
+    }
+
+    /* Map Container */
+    .map-container {
+      position: relative;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Custom Leaflet Markers */
+    .slot-marker {
+      width: 28px;
+      height: 28px;
+      background: var(--accent-empty);
+      border: 3px solid white;
+      border-radius: 50%;
+      cursor: pointer;
+      animation: pulse 1.5s infinite;
+      transition: transform 0.2s ease;
+      box-shadow: 0 0 15px rgba(255, 68, 68, 0.5);
+    }
+
+    .slot-marker:hover {
+      transform: scale(1.2);
+    }
+
+    .slot-marker.wrong {
+      animation: shake 0.5s ease;
+    }
+
+    .placed-marker {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      animation: placeIn 0.5s ease;
+    }
+
+    .placed-marker-img {
+      width: 60px;
+      height: 60px;
+      border-radius: 8px;
+      object-fit: cover;
+      border: 3px solid white;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    }
+
+    .placed-marker-img.hydro { border-color: var(--accent-hydro); box-shadow: 0 0 20px rgba(0, 212, 255, 0.5); }
+    .placed-marker-img.wind { border-color: var(--accent-wind); box-shadow: 0 0 20px rgba(0, 255, 136, 0.5); }
+    .placed-marker-img.solar { border-color: var(--accent-solar); box-shadow: 0 0 20px rgba(255, 215, 0, 0.5); }
+
+    .placed-marker-label {
+      margin-top: 4px;
+      padding: 4px 8px;
+      background: var(--bg-panel);
+      border-radius: 4px;
+      font-family: 'Source Code Pro', monospace;
+      font-size: 10px;
+      font-weight: 600;
+      white-space: nowrap;
+      color: white;
+      border: 1px solid var(--border-glow);
+    }
+
+    /* Feedback Toast */
+    .feedback-toast {
+      position: fixed;
+      top: 100px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      padding: 1rem 2rem;
+      border-radius: 8px;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1rem;
+      font-weight: 600;
+      opacity: 0;
+      transition: all 0.3s ease;
+      z-index: 1000;
+      pointer-events: none;
+    }
+
+    .feedback-toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    .feedback-toast.success {
+      background: rgba(0, 255, 136, 0.9);
+      color: #000;
+      box-shadow: 0 0 30px rgba(0, 255, 136, 0.5);
+    }
+
+    .feedback-toast.error {
+      background: rgba(255, 68, 68, 0.9);
+      color: #fff;
+      box-shadow: 0 0 30px rgba(255, 68, 68, 0.5);
+    }
+
+    /* Start Modal */
+    .start-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(10, 14, 26, 0.98);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 3000;
+      opacity: 1;
+      visibility: visible;
+      transition: all 0.5s ease;
+      overflow-y: auto;
+      padding: 1rem;
+    }
+
+    .start-overlay.hidden {
+      opacity: 0;
+      visibility: hidden;
+    }
+
+    .start-content {
+      text-align: center;
+      max-width: 400px;
+      padding: 2rem;
+    }
+
+    .start-icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+    }
+
+    .start-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 2rem;
+      font-weight: 900;
+      margin-bottom: 0.5rem;
+      background: linear-gradient(135deg, var(--accent-hydro), var(--accent-wind));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .start-subtitle {
+      font-size: 1rem;
+      color: var(--text-secondary);
+      margin-bottom: 2rem;
+    }
+
+    .name-input-group {
+      margin-bottom: 1.5rem;
+    }
+
+    .name-input {
+      width: 100%;
+      padding: 1rem 1.5rem;
+      font-family: 'Source Code Pro', monospace;
+      font-size: 1.1rem;
+      background: var(--bg-secondary);
+      border: 2px solid var(--border-glow);
+      border-radius: 8px;
+      color: var(--text-primary);
+      text-align: center;
+      transition: all 0.3s ease;
+    }
+
+    .name-input:focus {
+      outline: none;
+      border-color: var(--accent-hydro);
+      box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+    }
+
+    .name-input::placeholder {
+      color: var(--text-secondary);
+    }
+
+    .start-btn {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.1rem;
+      padding: 1rem 3rem;
+      background: linear-gradient(135deg, var(--accent-hydro), var(--accent-wind));
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 700;
+      letter-spacing: 1px;
+      transition: all 0.3s ease;
+    }
+
+    .start-btn:hover:not(:disabled) {
+      transform: scale(1.05);
+      box-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+    }
+
+    .start-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Leaderboard Styles */
+    .leaderboard {
+      margin-top: 2rem;
+      text-align: left;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .leaderboard-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1rem;
+      letter-spacing: 2px;
+      color: var(--accent-solar);
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+
+    .leaderboard-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .leaderboard-table th,
+    .leaderboard-table td {
+      padding: 0.5rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border-glow);
+    }
+
+    .leaderboard-table th {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.7rem;
+      letter-spacing: 1px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+
+    .leaderboard-table td {
+      font-size: 0.9rem;
+    }
+
+    .leaderboard-table tr.current-player {
+      background: rgba(0, 212, 255, 0.1);
+    }
+
+    .leaderboard-table tr.current-player td {
+      color: var(--accent-hydro);
+      font-weight: 600;
+    }
+
+    .rank-1 { color: var(--accent-solar); }
+    .rank-2 { color: #c0c0c0; }
+    .rank-3 { color: #cd7f32; }
+
+    .mistakes-count {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      background: rgba(255, 68, 68, 0.2);
+      border-radius: 4px;
+      color: var(--accent-empty);
+      font-weight: 600;
+    }
+
+    .mistakes-count.perfect {
+      background: rgba(0, 255, 136, 0.2);
+      color: var(--accent-wind);
+    }
+
+    .player-result {
+      font-size: 1rem;
+      color: var(--text-secondary);
+      margin-bottom: 1rem;
+    }
+
+    .player-result strong {
+      color: var(--text-primary);
+    }
+
+    /* Victory Modal */
+    .victory-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(10, 14, 26, 0.95);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.5s ease;
+      overflow-y: auto;
+      padding: 1rem;
+    }
+
+    .victory-overlay.show {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .victory-content {
+      text-align: center;
+      transform: scale(0.8);
+      transition: transform 0.5s ease;
+    }
+
+    .victory-overlay.show .victory-content {
+      transform: scale(1);
+    }
+
+    .victory-icon {
+      font-size: 5rem;
+      margin-bottom: 1.5rem;
+      animation: bounce 1s infinite;
+    }
+
+    .victory-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 2.5rem;
+      font-weight: 900;
+      margin-bottom: 1rem;
+      background: linear-gradient(135deg, var(--accent-hydro), var(--accent-wind), var(--accent-solar));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .victory-subtitle {
+      font-size: 1.2rem;
+      color: var(--text-secondary);
+      margin-bottom: 2rem;
+    }
+
+    .restart-btn {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1rem;
+      padding: 1rem 2.5rem;
+      background: linear-gradient(135deg, var(--accent-hydro), var(--accent-wind));
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 700;
+      letter-spacing: 1px;
+      transition: all 0.3s ease;
+    }
+
+    .restart-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+    }
+
+    /* Confetti Canvas */
+    #confetti-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2001;
+    }
+
+    /* Animations */
+    @keyframes pulse {
+      0%, 100% {
+        box-shadow: 0 0 15px rgba(255, 68, 68, 0.5);
+      }
+      50% {
+        box-shadow: 0 0 25px rgba(255, 68, 68, 0.8);
+      }
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-8px); }
+      40% { transform: translateX(8px); }
+      60% { transform: translateX(-8px); }
+      80% { transform: translateX(8px); }
+    }
+
+    @keyframes placeIn {
+      0% {
+        transform: scale(0);
+        opacity: 0;
+      }
+      50% {
+        transform: scale(1.2);
+      }
+      100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-15px); }
+    }
+
+    /* Leaflet overrides */
+    .leaflet-container {
+      background: var(--bg-primary);
+    }
+
+    .leaflet-control-attribution {
+      background: var(--bg-panel) !important;
+      color: var(--text-secondary) !important;
+      font-size: 10px !important;
+    }
+
+    .leaflet-control-attribution a {
+      color: var(--accent-hydro) !important;
+    }
+
+    .leaflet-control-zoom a {
+      background: var(--bg-panel) !important;
+      color: var(--text-primary) !important;
+      border-color: var(--border-glow) !important;
+    }
+
+    .leaflet-control-zoom a:hover {
+      background: var(--bg-secondary) !important;
+    }
+
+    /* Placed markers pane - allow clicks to pass through */
+    .leaflet-placedMarkers-pane {
+      pointer-events: none;
+    }
+
+    .placed-marker {
+      pointer-events: none;
+    }
+
+    /* Responsive - Tablets */
+    @media (max-width: 900px) {
+      .game-container {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto 1fr;
+      }
+
+      .sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--border-glow);
+        padding: 1rem;
+        overflow-x: auto;
+      }
+
+      .current-station {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .station-card {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem;
+        min-width: 0;
+        flex: 1;
+      }
+
+      .station-image {
+        width: 80px;
+        min-width: 80px;
+        aspect-ratio: 1;
+        margin-bottom: 0;
+      }
+
+      .station-info {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .station-name {
+        font-size: 0.95rem;
+        margin-bottom: 0.5rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .section-label {
+        display: none;
+      }
+
+      .legend {
+        display: none;
+      }
+
+      .instructions {
+        display: none;
+      }
+    }
+
+    /* Responsive - Mobile */
+    @media (max-width: 600px) {
+      .header {
+        padding: 0.75rem 1rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+
+      .header h1 {
+        font-size: 1rem;
+        letter-spacing: 1px;
+        width: 100%;
+        text-align: center;
+      }
+
+      .progress-bar {
+        width: 100%;
+        justify-content: center;
+        gap: 0.5rem;
+      }
+
+      .progress-text {
+        font-size: 0.75rem;
+      }
+
+      .progress-dot {
+        width: 10px;
+        height: 10px;
+      }
+
+      .game-container {
+        grid-template-rows: auto auto 1fr;
+      }
+
+      .sidebar {
+        padding: 0.75rem;
+      }
+
+      .station-card {
+        padding: 0.75rem;
+        gap: 0.75rem;
+      }
+
+      .station-image {
+        width: 60px;
+        min-width: 60px;
+      }
+
+      .station-name {
+        font-size: 0.85rem;
+      }
+
+      .station-type {
+        font-size: 0.65rem;
+        padding: 0.3rem 0.6rem;
+      }
+
+      /* Larger markers for touch */
+      .slot-marker {
+        width: 36px;
+        height: 36px;
+      }
+
+      .placed-marker-img {
+        width: 50px;
+        height: 50px;
+      }
+
+      .placed-marker-label {
+        font-size: 8px;
+        padding: 3px 6px;
+      }
+
+      /* Feedback toast */
+      .feedback-toast {
+        top: 70px;
+        padding: 0.75rem 1.5rem;
+        font-size: 0.85rem;
+        width: calc(100% - 2rem);
+        max-width: 300px;
+      }
+
+      /* Start overlay mobile */
+      .start-content {
+        padding: 1.5rem;
+        width: calc(100% - 2rem);
+        max-width: 350px;
+      }
+
+      .start-icon {
+        font-size: 3rem;
+      }
+
+      .start-title {
+        font-size: 1.4rem;
+      }
+
+      .start-subtitle {
+        font-size: 0.9rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .name-input {
+        padding: 1rem 1.25rem;
+        font-size: 1.1rem;
+      }
+
+      .start-btn {
+        width: 100%;
+        padding: 1.1rem 2rem;
+        font-size: 1.1rem;
+      }
+
+      /* Victory overlay mobile */
+      .victory-content {
+        padding: 1.5rem;
+        width: calc(100% - 2rem);
+        max-width: 350px;
+      }
+
+      .victory-icon {
+        font-size: 3.5rem;
+        margin-bottom: 1rem;
+      }
+
+      .victory-title {
+        font-size: 1.8rem;
+      }
+
+      .victory-subtitle {
+        font-size: 1rem;
+        margin-bottom: 1rem;
+      }
+
+      .player-result {
+        font-size: 0.9rem;
+      }
+
+      .leaderboard {
+        margin-top: 1.5rem;
+        max-height: 200px;
+      }
+
+      .leaderboard-title {
+        font-size: 0.85rem;
+      }
+
+      .leaderboard-table th,
+      .leaderboard-table td {
+        padding: 0.4rem 0.5rem;
+        font-size: 0.8rem;
+      }
+
+      .leaderboard-table th {
+        font-size: 0.6rem;
+      }
+
+      /* Leaflet controls */
+      .leaflet-control-zoom {
+        margin: 10px !important;
+      }
+
+      .leaflet-control-zoom a {
+        width: 36px !important;
+        height: 36px !important;
+        line-height: 36px !important;
+        font-size: 18px !important;
+      }
+    }
+
+    /* Extra small devices */
+    @media (max-width: 380px) {
+      .header h1 {
+        font-size: 0.85rem;
+      }
+
+      .station-image {
+        width: 50px;
+        min-width: 50px;
+      }
+
+      .station-name {
+        font-size: 0.75rem;
+      }
+
+      .start-title {
+        font-size: 1.2rem;
+      }
+
+      .victory-title {
+        font-size: 1.5rem;
+      }
+    }
+
+    /* Landscape mobile */
+    @media (max-height: 500px) and (orientation: landscape) {
+      .game-container {
+        grid-template-columns: 280px 1fr;
+        grid-template-rows: auto 1fr;
+      }
+
+      .header {
+        padding: 0.5rem 1rem;
+      }
+
+      .header h1 {
+        font-size: 0.9rem;
+        width: auto;
+      }
+
+      .sidebar {
+        padding: 0.5rem;
+        overflow-y: auto;
+      }
+
+      .station-card {
+        padding: 0.5rem;
+      }
+
+      .station-image {
+        width: 50px;
+        min-width: 50px;
+      }
+
+      .start-content,
+      .victory-content {
+        transform: scale(0.85);
+      }
+
+      .leaderboard {
+        max-height: 120px;
+      }
+    }
+
+    /* Touch device optimizations */
+    @media (hover: none) and (pointer: coarse) {
+      .slot-marker {
+        width: 40px;
+        height: 40px;
+      }
+
+      .slot-marker:hover {
+        transform: none;
+      }
+
+      .start-btn:hover:not(:disabled),
+      .restart-btn:hover {
+        transform: none;
+        box-shadow: none;
+      }
+
+      .leaflet-control-zoom a:hover {
+        background: var(--bg-panel) !important;
+      }
+    }
+
+    /* Safe area for notched phones */
+    @supports (padding: max(0px)) {
+      .header {
+        padding-left: max(1rem, env(safe-area-inset-left));
+        padding-right: max(1rem, env(safe-area-inset-right));
+      }
+
+      .sidebar {
+        padding-left: max(0.75rem, env(safe-area-inset-left));
+        padding-right: max(0.75rem, env(safe-area-inset-right));
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="game-container">
+    <!-- Header -->
+    <header class="header">
+      <h1>⚡ ЕНЕРГОСИСТЕМА УКРАЇНИ</h1>
+      <div class="progress-bar">
+        <span class="progress-text">Прогрес:</span>
+        <div class="progress-dots" id="progressDots"></div>
+        <span class="progress-text" id="progressCount">0/7</span>
+      </div>
+    </header>
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="current-station">
+        <div class="section-label">// Поточна станція</div>
+        <div class="station-card" id="stationCard">
+          <div class="station-image">
+            <img id="stationImage" src="" alt="Station">
+          </div>
+          <div class="station-info">
+            <h2 class="station-name" id="stationName">Loading...</h2>
+            <span class="station-type" id="stationType">
+              <span class="type-icon" id="typeIcon">💧</span>
+              <span id="typeName">ГЕС</span>
+            </span>
+          </div>
+        </div>
+        <div class="instructions">
+          <p>👆 Знайдіть правильне розташування цієї електростанції на карті та натисніть на червоний маркер.</p>
+        </div>
+      </div>
+
+      <div class="legend">
+        <div class="section-label">// Легенда</div>
+        <div class="legend-item">
+          <div class="legend-dot wind"></div>
+          <span>Вітрові електростанції (ВЕС)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot solar"></div>
+          <span>Сонячні електростанції (СЕС)</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot empty"></div>
+          <span>Доступна локація</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Map -->
+    <main class="map-container">
+      <div id="map"></div>
+    </main>
+  </div>
+
+  <!-- Start Overlay -->
+  <div class="start-overlay" id="startOverlay">
+    <div class="start-content">
+      <div class="start-icon">⚡</div>
+      <h2 class="start-title">ВІДНОВЛЮВАЛЬНА ЕНЕРГЕТИКА УКРАЇНИ</h2>
+      <p class="start-subtitle">Розмістіть електростанції на карті</p>
+      <div class="name-input-group">
+        <input type="text" id="playerNameInput" class="name-input" placeholder="Введіть ваше ім'я" maxlength="20" autocomplete="off">
+      </div>
+      <button class="start-btn" id="startBtn" onclick="startGame()" disabled>ПОЧАТИ ГРУ</button>
+    </div>
+  </div>
+
+  <!-- Feedback Toast -->
+  <div class="feedback-toast" id="feedbackToast"></div>
+
+  <!-- Victory Overlay -->
+  <div class="victory-overlay" id="victoryOverlay">
+    <div class="victory-content">
+      <div class="victory-icon">🎉</div>
+      <h2 class="victory-title">Вітаємо!</h2>
+      <p class="victory-subtitle">Станції розташовані правильно!</p>
+      <p class="player-result" id="playerResult"></p>
+      <div class="leaderboard" id="leaderboard">
+        <h3 class="leaderboard-title">🏆 ТАБЛИЦЯ ЛІДЕРІВ</h3>
+        <table class="leaderboard-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Ім'я</th>
+              <th>Помилки</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboardBody">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confetti Canvas -->
+  <canvas id="confetti-canvas"></canvas>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+
+    // Firebase configuration
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT.firebaseapp.com",
+      projectId: "YOUR_PROJECT",
+      storageBucket: "YOUR_PROJECT.firebasestorage.app",
+      messagingSenderId: "YOUR_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // Make Firestore functions globally available
+    window.firebaseDB = db;
+    window.firebaseAddDoc = addDoc;
+    window.firebaseCollection = collection;
+    window.firebaseQuery = query;
+    window.firebaseOrderBy = orderBy;
+    window.firebaseLimit = limit;
+    window.firebaseGetDocs = getDocs;
+    window.firebaseReady = true;
+
+    // Dispatch event when Firebase is ready
+    window.dispatchEvent(new Event('firebaseReady'));
+  </script>
+
+  <script>
+    // ========== DATA ==========
+    const stations = [
+      {
+        id: 0,
+        name: "Тилігульська ВЕС",
+        type: "wind",
+        lat: 46.781, lng: 31.153,
+        img: "images/tylihulska-ves.jpg"
+      },
+      {
+        id: 1,
+        name: "Нікопольська СЕС",
+        type: "solar",
+        lat: 47.601, lng: 34.241,
+        img: "images/nikopolska-ses.png"
+      },
+      {
+        id: 2,
+        name: "Старокозача СЕС",
+        type: "solar",
+        lat: 46.345, lng: 29.985,
+        img: "images/starokozacha-ses.jpg"
+      },
+      {
+        id: 3,
+        name: "Чорнобильська СЕС",
+        type: "solar",
+        lat: 51.5, lng: 30.74,
+        img: "images/chornobylska-ses.jpg"
+      },
+      {
+        id: 4,
+        name: "СЕС Прогресівка",
+        type: "solar",
+        lat: 46.918, lng: 31.071,
+        img: "images/progresivka-ses.jpg"
+      },
+      {
+        id: 5,
+        name: "Дністровська ВЕС",
+        type: "wind",
+        lat: 46.282, lng: 30.178,
+        img: "images/dnistrovska-ves.jpg"
+      },
+      {
+        id: 6,
+        name: "Орівська ВЕС",
+        type: "wind",
+        lat: 49.211, lng: 23.483,
+        img: "images/orivska-ves.jpg"
+      },
+    ];
+
+    // ========== GAME STATE ==========
+    let gameState = {
+      currentStationIndex: 0,
+      placedStations: [],
+      shuffledStations: [],
+      markers: [],
+      map: null,
+      playerName: '',
+      mistakes: 0
+    };
+
+    // ========== HELPER FUNCTIONS ==========
+    function shuffleArray(array) {
+      const shuffled = [...array];
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      return shuffled;
+    }
+
+    function getTypeInfo(type) {
+      const types = {
+        wind: { icon: '🌀', name: 'ВЕС', label: 'Вітрова' },
+        solar: { icon: '☀️', name: 'СЕС', label: 'Сонячна' }
+      };
+      return types[type] || types.hydro;
+    }
+
+    // ========== LEADERBOARD FUNCTIONS (Firebase) ==========
+    const COLLECTION_NAME = 'leaderboard';
+
+    async function getLeaderboard() {
+      try {
+        if (!window.firebaseReady) {
+          console.log('Firebase not ready yet');
+          return [];
+        }
+        const q = window.firebaseQuery(
+          window.firebaseCollection(window.firebaseDB, COLLECTION_NAME),
+          window.firebaseOrderBy('mistakes', 'asc'),
+          window.firebaseOrderBy('timestamp', 'desc'),
+          window.firebaseLimit(50)
+        );
+        const snapshot = await window.firebaseGetDocs(q);
+        const results = [];
+        snapshot.forEach(doc => {
+          results.push(doc.data());
+        });
+        return results;
+      } catch (error) {
+        console.error('Error getting leaderboard:', error);
+        return [];
+      }
+    }
+
+    async function saveToLeaderboard(name, mistakes) {
+      try {
+        if (!window.firebaseReady) {
+          console.log('Firebase not ready yet');
+          return;
+        }
+        await window.firebaseAddDoc(
+          window.firebaseCollection(window.firebaseDB, COLLECTION_NAME),
+          {
+            name: name,
+            mistakes: mistakes,
+            timestamp: Date.now()
+          }
+        );
+        console.log('Score saved to Firebase');
+      } catch (error) {
+        console.error('Error saving to leaderboard:', error);
+      }
+    }
+
+    async function displayLeaderboard(currentPlayerName, currentMistakes) {
+      const tbody = document.getElementById('leaderboardBody');
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Завантаження...</td></tr>';
+
+      // Show player's result
+      const resultEl = document.getElementById('playerResult');
+      const mistakeWord = currentMistakes === 1 ? 'помилка' :
+                          (currentMistakes >= 2 && currentMistakes <= 4) ? 'помилки' : 'помилок';
+      resultEl.innerHTML = `<strong>${currentPlayerName}</strong>, ви зробили <span class="mistakes-count ${currentMistakes === 0 ? 'perfect' : ''}">${currentMistakes}</span> ${mistakeWord}`;
+
+      // Fetch leaderboard from Firebase
+      const leaderboard = await getLeaderboard();
+      tbody.innerHTML = '';
+
+      if (leaderboard.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Поки що немає результатів</td></tr>';
+        return;
+      }
+
+      // Find current player's position (most recent entry with same name/mistakes)
+      const currentPlayerIndex = leaderboard.findIndex(
+        e => e.name === currentPlayerName && e.mistakes === currentMistakes
+      );
+
+      leaderboard.slice(0, 30).forEach((entry, index) => {
+        const tr = document.createElement('tr');
+        const isCurrentPlayer = index === currentPlayerIndex;
+        if (isCurrentPlayer) tr.classList.add('current-player');
+
+        const rankClass = index < 3 ? `rank-${index + 1}` : '';
+        const rankDisplay = index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1);
+
+        tr.innerHTML = `
+          <td class="${rankClass}">${rankDisplay}</td>
+          <td>${entry.name}</td>
+          <td><span class="mistakes-count ${entry.mistakes === 0 ? 'perfect' : ''}">${entry.mistakes}</span></td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // ========== UI UPDATES ==========
+    function updateCurrentStationUI() {
+      const station = gameState.shuffledStations[gameState.currentStationIndex];
+      const typeInfo = getTypeInfo(station.type);
+
+      document.getElementById('stationImage').src = station.img;
+      document.getElementById('stationName').textContent = station.name;
+      document.getElementById('typeIcon').textContent = typeInfo.icon;
+      document.getElementById('typeName').textContent = typeInfo.name;
+
+      const stationCard = document.getElementById('stationCard');
+      stationCard.className = `station-card ${station.type}`;
+
+      const stationType = document.getElementById('stationType');
+      stationType.className = `station-type ${station.type}`;
+    }
+
+    function updateProgress() {
+      const count = gameState.placedStations.length;
+      document.getElementById('progressCount').textContent = `${count}/7`;
+
+      const dots = document.getElementById('progressDots');
+      dots.innerHTML = '';
+      for (let i = 0; i < 7; i++) {
+        const dot = document.createElement('div');
+        dot.className = `progress-dot ${i < count ? 'completed' : ''}`;
+        dots.appendChild(dot);
+      }
+    }
+
+    function showFeedback(message, isSuccess) {
+      const toast = document.getElementById('feedbackToast');
+      toast.textContent = message;
+      toast.className = `feedback-toast show ${isSuccess ? 'success' : 'error'}`;
+
+      setTimeout(() => {
+        toast.className = 'feedback-toast';
+      }, 1500);
+    }
+
+    // ========== MARKER CREATION ==========
+    function isMobile() {
+      return window.innerWidth <= 600 || ('ontouchstart' in window);
+    }
+
+    function getMarkerSizes() {
+      const mobile = isMobile();
+      return {
+        slot: mobile ? 40 : 28,
+        placed: mobile ? 60 : 80
+      };
+    }
+
+    // Offset pairs of close stations so they don't overlap
+    // Pairs: (0,4) and (2,5) are geographically close
+    function getMarkerOffset(stationId, size) {
+      const offsetAmount = size * 0.7; // Offset by 70% of marker size
+      const offsets = {
+        0: { x: -offsetAmount, y: 0 },  // Тилігульська ВЕС - left
+        4: { x: offsetAmount, y: 0 },   // СЕС Прогресівка - right
+        2: { x: -offsetAmount, y: 0 },  // Старокозача СЕС - left
+        5: { x: offsetAmount, y: 0 }    // Дністровська ВЕС - right
+      };
+      return offsets[stationId] || { x: 0, y: 0 };
+    }
+
+    function createSlotMarker(station) {
+      const sizes = getMarkerSizes();
+      const offset = getMarkerOffset(station.id, sizes.slot);
+      const markerEl = document.createElement('div');
+      markerEl.className = 'slot-marker';
+
+      const icon = L.divIcon({
+        html: markerEl.outerHTML,
+        className: '',
+        iconSize: [sizes.slot, sizes.slot],
+        iconAnchor: [sizes.slot / 2 + offset.x, sizes.slot / 2 + offset.y]
+      });
+
+      const marker = L.marker([station.lat, station.lng], { icon, pane: 'slotMarkers' });
+      marker.stationId = station.id;
+      marker.isPlaced = false;
+
+      marker.on('click', () => handleMarkerClick(marker, station));
+
+      return marker;
+    }
+
+    function createPlacedMarker(station) {
+      const sizes = getMarkerSizes();
+      const offset = getMarkerOffset(station.id, sizes.placed);
+      const html = `
+        <div class="placed-marker">
+          <img src="${station.img}" alt="${station.name}" class="placed-marker-img ${station.type}">
+          <span class="placed-marker-label">${station.name}</span>
+        </div>
+      `;
+
+      const icon = L.divIcon({
+        html: html,
+        className: '',
+        iconSize: [sizes.placed, sizes.placed],
+        iconAnchor: [sizes.placed / 2 + offset.x, sizes.placed / 2 + offset.y]
+      });
+
+      return L.marker([station.lat, station.lng], { icon, pane: 'placedMarkers' });
+    }
+
+    // ========== GAME LOGIC ==========
+    function handleMarkerClick(marker, clickedStation) {
+      if (marker.isPlaced) return;
+
+      const currentStation = gameState.shuffledStations[gameState.currentStationIndex];
+
+      if (clickedStation.id === currentStation.id) {
+        // Correct placement
+        handleCorrectPlacement(marker, currentStation);
+      } else {
+        // Incorrect placement
+        handleIncorrectPlacement(marker);
+      }
+    }
+
+    function handleCorrectPlacement(marker, station) {
+      showFeedback('✓ Правильно!', true);
+
+      // Remove old marker
+      gameState.map.removeLayer(marker);
+
+      // Add placed marker
+      const placedMarker = createPlacedMarker(station);
+      placedMarker.addTo(gameState.map);
+
+      // Update game state
+      marker.isPlaced = true;
+      gameState.placedStations.push(station.id);
+      gameState.currentStationIndex++;
+
+      updateProgress();
+
+      // Check for win
+      if (gameState.currentStationIndex >= gameState.shuffledStations.length) {
+        setTimeout(showVictory, 500);
+      } else {
+        updateCurrentStationUI();
+      }
+    }
+
+    function handleIncorrectPlacement(marker) {
+      gameState.mistakes++;
+      showFeedback('✗ Неправильно, спробуйте ще!', false);
+
+      // Animate the marker
+      const el = marker.getElement();
+      if (el) {
+        const markerDiv = el.querySelector('.slot-marker');
+        if (markerDiv) {
+          markerDiv.classList.add('wrong');
+          setTimeout(() => markerDiv.classList.remove('wrong'), 500);
+        }
+      }
+    }
+
+    // ========== VICTORY ==========
+    async function showVictory() {
+      // Show victory overlay immediately
+      document.getElementById('victoryOverlay').classList.add('show');
+      launchConfetti();
+
+      // Save to leaderboard and display (async)
+      await saveToLeaderboard(gameState.playerName, gameState.mistakes);
+      await displayLeaderboard(gameState.playerName, gameState.mistakes);
+    }
+
+    function launchConfetti() {
+      const canvas = document.getElementById('confetti-canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+
+      const confetti = [];
+      const colors = ['#00d4ff', '#00ff88', '#ffd700', '#ff4444', '#ffffff'];
+
+      for (let i = 0; i < 150; i++) {
+        confetti.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height - canvas.height,
+          r: Math.random() * 6 + 4,
+          d: Math.random() * 150,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          tilt: Math.random() * 10 - 10,
+          tiltAngle: 0,
+          tiltAngleIncrement: Math.random() * 0.07 + 0.05
+        });
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        confetti.forEach((c, i) => {
+          ctx.beginPath();
+          ctx.lineWidth = c.r;
+          ctx.strokeStyle = c.color;
+          ctx.moveTo(c.x + c.tilt + c.r / 4, c.y);
+          ctx.lineTo(c.x + c.tilt, c.y + c.tilt + c.r / 4);
+          ctx.stroke();
+        });
+
+        update();
+      }
+
+      function update() {
+        confetti.forEach((c, i) => {
+          c.y += Math.cos(c.d) + 2 + c.r / 2;
+          c.x += Math.sin(c.d);
+          c.tiltAngle += c.tiltAngleIncrement;
+          c.tilt = Math.sin(c.tiltAngle) * 15;
+
+          if (c.y > canvas.height) {
+            confetti[i] = {
+              x: Math.random() * canvas.width,
+              y: -10,
+              r: c.r,
+              d: c.d,
+              color: c.color,
+              tilt: c.tilt,
+              tiltAngle: c.tiltAngle,
+              tiltAngleIncrement: c.tiltAngleIncrement
+            };
+          }
+        });
+      }
+
+      let animationFrame;
+      function animate() {
+        draw();
+        animationFrame = requestAnimationFrame(animate);
+      }
+      animate();
+
+      // Stop after 5 seconds
+      setTimeout(() => {
+        cancelAnimationFrame(animationFrame);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }, 5000);
+    }
+
+    // ========== START GAME ==========
+    function startGame() {
+      const nameInput = document.getElementById('playerNameInput');
+      const name = nameInput.value.trim();
+
+      if (!name) return;
+
+      gameState.playerName = name;
+      gameState.mistakes = 0;
+
+      // Hide start overlay
+      document.getElementById('startOverlay').classList.add('hidden');
+
+      // Reset and start game
+      resetGameState();
+    }
+
+    function resetGameState() {
+      // Clear existing markers
+      gameState.markers.forEach(m => gameState.map.removeLayer(m));
+      gameState.map.eachLayer(layer => {
+        if (layer instanceof L.Marker) {
+          gameState.map.removeLayer(layer);
+        }
+      });
+
+      // Reset state
+      gameState.currentStationIndex = 0;
+      gameState.placedStations = [];
+      gameState.shuffledStations = shuffleArray(stations);
+      gameState.markers = [];
+      gameState.mistakes = 0;
+
+      // Create new markers
+      stations.forEach(station => {
+        const marker = createSlotMarker(station);
+        marker.addTo(gameState.map);
+        gameState.markers.push(marker);
+      });
+
+      updateCurrentStationUI();
+      updateProgress();
+    }
+
+    // ========== RESTART ==========
+    function restartGame() {
+      // Hide victory
+      document.getElementById('victoryOverlay').classList.remove('show');
+
+      // Clear name input and show start overlay for new player
+      document.getElementById('playerNameInput').value = '';
+      document.getElementById('startBtn').disabled = true;
+      document.getElementById('startOverlay').classList.remove('hidden');
+    }
+
+    // ========== INITIALIZATION ==========
+    function initGame() {
+      // Initialize map centered on Ukraine
+      gameState.map = L.map('map', {
+        center: [48.5, 32.5],
+        zoom: 6,
+        minZoom: 5,
+        maxZoom: 10
+      });
+
+      // Create custom panes for z-index control
+      gameState.map.createPane('placedMarkers');
+      gameState.map.getPane('placedMarkers').style.zIndex = 640;
+
+      gameState.map.createPane('slotMarkers');
+      gameState.map.getPane('slotMarkers').style.zIndex = 650;
+
+      // Add dark tile layer
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20
+      }).addTo(gameState.map);
+
+      // Set up name input validation
+      const nameInput = document.getElementById('playerNameInput');
+      const startBtn = document.getElementById('startBtn');
+
+      nameInput.addEventListener('input', () => {
+        const hasName = nameInput.value.trim().length > 0;
+        startBtn.disabled = !hasName;
+      });
+
+      // Allow Enter key to start game
+      nameInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && nameInput.value.trim().length > 0) {
+          startGame();
+        }
+      });
+
+      // Focus on name input
+      nameInput.focus();
+
+      // Pre-initialize markers (they'll be reset when game starts)
+      gameState.shuffledStations = shuffleArray(stations);
+      stations.forEach(station => {
+        const marker = createSlotMarker(station);
+        marker.addTo(gameState.map);
+        gameState.markers.push(marker);
+      });
+
+      updateCurrentStationUI();
+      updateProgress();
+    }
+
+    // Start the game when DOM is ready
+    document.addEventListener('DOMContentLoaded', initGame);
+  </script>
+</body>
+</html>
