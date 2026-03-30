@@ -1440,6 +1440,56 @@
       return L.marker([station.lat, station.lng], { icon, pane: 'placedMarkers' });
     }
 
+    // ========== SOUND EFFECTS ==========
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playSound(type) {
+      const now = audioCtx.currentTime;
+
+      if (type === 'correct') {
+        // Two-note rising chime
+        [400, 600].forEach((freq, i) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.3, now + i * 0.12);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.3);
+          osc.connect(gain).connect(audioCtx.destination);
+          osc.start(now + i * 0.12);
+          osc.stop(now + i * 0.12 + 0.3);
+        });
+      }
+
+      if (type === 'wrong') {
+        // Low buzzy tone
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = 150;
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.connect(gain).connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      }
+
+      if (type === 'victory') {
+        // Ascending fanfare
+        [523, 659, 784, 1047].forEach((freq, i) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = freq;
+          gain.gain.setValueAtTime(0.25, now + i * 0.15);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.15 + 0.4);
+          osc.connect(gain).connect(audioCtx.destination);
+          osc.start(now + i * 0.15);
+          osc.stop(now + i * 0.15 + 0.4);
+        });
+      }
+    }
+
     // ========== GAME LOGIC ==========
     function handleMarkerClick(marker, clickedStation) {
       if (marker.isPlaced) return;
@@ -1456,6 +1506,7 @@
     }
 
     function handleCorrectPlacement(marker, station) {
+      playSound('correct');
       showFeedback('✓ Правильно!', true);
 
       // Remove old marker
@@ -1481,6 +1532,7 @@
     }
 
     function handleIncorrectPlacement(marker) {
+      playSound('wrong');
       gameState.mistakes++;
       showFeedback('✗ Неправильно, спробуйте ще!', false);
 
@@ -1498,6 +1550,7 @@
     // ========== VICTORY ==========
     async function showVictory() {
       // Show victory overlay immediately
+      playSound('victory');
       document.getElementById('victoryOverlay').classList.add('show');
       launchConfetti();
 
